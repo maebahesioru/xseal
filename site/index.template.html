@@ -54,9 +54,11 @@
     <h1>投稿を、<span>読みにくく</span>して出そう。</h1>
     <p class="lead">X の凍結祭り対策。本文を「封印」してから投稿すれば、キーワード検索にも一括通報ボットにも引っかからない。読む側は拡張が自動で復号する。</p>
     <div class="cta">
-      <a class="btn" href="#tool">ブラウザで試す</a>
-      <a class="btn ghost" href="#ext">拡張の入れ方</a>
+      <a class="btn" href="https://github.com/maebahesioru/xseal/releases/download/v1.0.0/xseal-chrome.zip">Chrome 版をダウンロード</a>
+      <a class="btn ghost" href="https://github.com/maebahesioru/xseal/releases/download/v1.0.0/xseal-firefox.zip">Firefox 版</a>
+      <a class="btn ghost" href="#tool">ブラウザで試す</a>
     </div>
+    <p class="muted" style="margin-top:10px">zip を展開 → <code>chrome://extensions</code> で読み込むだけ（<a href="#ext">詳しい入れ方</a>／<a href="https://github.com/maebahesioru/xseal">ソース</a>）。</p>
   </header>
 
   <section id="why">
@@ -104,11 +106,16 @@
 
   <section id="ext">
     <h2>拡張の入れ方</h2>
+    <div class="grid" style="margin-bottom:18px">
+      <div class="card"><h3>Chrome / Edge / Brave</h3><p><a class="btn" href="https://github.com/maebahesioru/xseal/releases/download/v1.0.0/xseal-chrome.zip">xseal-chrome.zip</a></p><p class="muted">541 KB ・ v1.0.0</p></div>
+      <div class="card"><h3>Firefox</h3><p><a class="btn" href="https://github.com/maebahesioru/xseal/releases/download/v1.0.0/xseal-firefox.zip">xseal-firefox.zip</a></p><p class="muted">541 KB ・ v1.0.0</p></div>
+    </div>
     <ol>
-      <li>Chrome / Edge / Brave: <code>chrome://extensions</code> を開き「デベロッパーモード」を ON →「パッケージ化されていない拡張機能を読み込む」→ <code>ext/chrome</code> を選ぶ。</li>
-      <li>Firefox: <code>about:debugging#/runtime/this-firefox</code> →「一時的なアドオンを読み込む」→ <code>ext/firefox/manifest.json</code> を選ぶ。</li>
-      <li>x.com を開き直す。投稿欄に 🔒 が出る。</li>
+      <li>Chrome / Edge / Brave: zip を展開し、<code>chrome://extensions</code> で「デベロッパーモード」を ON →「パッケージ化されていない拡張機能を読み込む」→ 展開したフォルダ（<code>manifest.json</code> がある階層）を選ぶ。</li>
+      <li>Firefox: zip を展開し、<code>about:debugging#/runtime/this-firefox</code> →「一時的なアドオンを読み込む」→ <code>manifest.json</code> を選ぶ。ブラウザを閉じると消えるので、常用するなら <code>xpinstall.signatures.required</code> を無効化して署名なし xpi を入れる。</li>
+      <li>x.com を開き直す。投稿欄の右上に 🔒 が出る（DM は画面右下にも常設ボタンが出る）。</li>
     </ol>
+    <p class="muted">ソースと更新履歴: <a href="https://github.com/maebahesioru/xseal">github.com/maebahesioru/xseal</a></p>
     <p class="muted">本文を書いて 🔒 を押すと、その場で封印された文字列に置き換わる。あとは普通にポストするだけ。タイムライン・検索結果・DM の封筒は自動で復号されて下に表示される。</p>
     <p class="warn">免責: この形式は暗号ではない。検索回避の効果はあるが、凍結を保証するものではない。</p>
   </section>
@@ -123,7 +130,7 @@
   </section>
 
   <footer>
-    xseal — ローカル完結。サーバーに何も送らない。実装は <code>x_cipher_research/</code> の <code>xseal.mjs</code> と同一コア。
+    <a href="https://github.com/maebahesioru/xseal">github.com/maebahesioru/xseal</a> — MIT ・ ローカル完結（サーバーに何も送らない）・ 外部 CDN も読み込まない。
   </footer>
 </div>
 
