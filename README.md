@@ -3,7 +3,7 @@
 ツイート・DM の本文を、キーワード検索では引っかからない文字列に変換して投稿する Chrome / Firefox 拡張です。
 読む側は拡張が自動で復号します。鍵は使いません（**暗号ではなく難読化**です）。
 
-**配布ページ**: https://maebahesioru.github.io/xseal/
+**配布ページ**: https://angou.hikamers.app/  （ミラー: https://maebahesioru.github.io/xseal/）
 
 ```
 平文:   日本産の魚介類は終わってます
