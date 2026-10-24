@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>xseal content script harness</title>
+<link rel="stylesheet" href="../chrome/content.css">
+<style>
+  body { background:#000; color:#e7ecf2; font:15px/1.6 -apple-system,"Noto Sans JP",sans-serif; padding:24px; max-width:820px; margin:0 auto; }
+  h1 { font-size:18px; }
+  .tweet { border-bottom:1px solid #2f3336; padding:12px 0; }
+  .name { color:#8b98a6; font-size:13px; }
+  .composer { border:1px solid #2f3336; border-radius:12px; padding:12px; margin-bottom:20px; }
+  .editor { min-height:56px; outline:none; padding:6px 0; }
+  .toolbar { display:flex; gap:8px; align-items:center; border-top:1px solid #2f3336; margin-top:8px; padding-top:8px; }
+  .toolbar button { background:#1d9bf0; color:#fff; border:0; border-radius:9999px; padding:8px 16px; font-weight:700; }
+  #log { color:#2ecc71; font-size:13px; }
+  .fail { color:#f4212e; }
+</style>
+</head>
+<body>
+<h1>xseal harness — X の DOM を模す</h1>
+<div id="log">起動待ち…</div>
+
+<!-- A: ツールバーあり（native に入るケース） -->
+<div class="composer" id="c1">
+  <div class="editor" contenteditable="true" data-testid="tweetTextarea_0" role="textbox">今日は朝から雨だったけど、昼過ぎには止んでちょっと嬉しかった。</div>
+  <div class="toolbar" data-testid="toolBar">
+    <button type="button" data-testid="tweetButtonInline">ポストする</button>
+  </div>
+</div>
+
+<!-- B: ツールバーなし（X の DOM が変わったケース） -->
+<div class="composer" id="c2">
+  <div class="editor" contenteditable="true" data-testid="tweetTextarea_1" role="textbox">二つ目の本文欄。ツールバーが無いのでフローティングで出るはず。</div>
+</div>
+
+<!-- C: data-testid も role も無い本文欄（X が DOM を変えたケース） -->
+<div class="composer" id="c3">
+  <div class="editor weird" contenteditable="true">三つ目。属性が何も無い本文欄でもフォーカスすれば出るはず。</div>
+</div>
+
+<!-- D: 入れ子で二重に当たる本文欄（実機 X でボタンが2つ重なった形） -->
+<div class="composer" id="c4">
+  <div class="editor" contenteditable="true" data-testid="tweetTextarea_2" role="textbox">
+    <div class="inner" contenteditable="true" role="textbox">入れ子の本文欄。外と内の両方がセレクタに当たる。</div>
+  </div>
+</div>
+
+<div id="feed"></div>
+
+<script>
+  // ビルドし直したときキャッシュを掴まないよう、毎回ちがう query で読み込む
+  const V = Date.now();
+  for (const src of ['../chrome/core.js', '../chrome/content.js']) {
+    document.write('<script src="' + src + '?v=' + V + '"><\/script>');
+  }
+</script>
+<script>
+const log = document.getElementById('log');
+const say = (s, bad) => { const d = document.createElement('div'); d.textContent = s; if (bad) d.className = 'fail'; log.append(d); };
+const results = [];
+const check = (name, ok, extra = '') => { results.push([name, ok]); say((ok ? '✅ ' : '❌ ') + name + (extra ? ' — ' + extra : ''), !ok); };
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+(async () => {
+  await wait(500);
+
+  // 1) ツールバーがある方は native のボタン
+  const tb = document.querySelector('#c1 [data-testid="toolBar"]');
+  check('ツールバーに 🔒 が入る', !!tb.querySelector('.xseal-btn'));
+
+  // 2) ツールバーが無い方はフローティングのピル
+  const pills = document.querySelectorAll('.xseal-pill');
+  const shown = [...pills].filter(p => p.style.display !== 'none');
+  check('ツールバーが無くてもフローティングの 🔒 が出る', shown.length >= 1, `pills=${pills.length} shown=${shown.length}`);
+  if (shown[0]) {
+    const r = shown[0].getBoundingClientRect();
+    check('ピルが画面内に配置されている', r.width > 20 && r.top >= 0, `top=${Math.round(r.top)} left=${Math.round(r.left)}`);
+  }
+
+  // 3) ツールバー側のボタンで封印できる
+  const ed1 = document.querySelector('#c1 [data-testid="tweetTextarea_0"]');
+  const before1 = ed1.innerText.trim();
+  tb.querySelector('.xseal-btn').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await wait(600);
+  const after1 = (ed1.innerText || '').trim();
+  check('ツールバーのボタンで本文が xo 封筒になる', after1.startsWith('xo'), after1.slice(0, 12) + '…');
+  check('復号すると元に戻る', (await XSEAL.open(XSEAL.PROFILES.plain, [], after1)) === before1);
+  check('重みが 280 以内', XSEAL.weightedLength(after1) <= 280, 'w=' + XSEAL.weightedLength(after1));
+
+  // 4) Alt+S で封印できる（2つ目の欄にフォーカスして）
+  const ed2 = document.querySelector('#c2 [data-testid="tweetTextarea_1"]');
+  const before2 = ed2.innerText.trim();
+  ed2.focus();
+  await wait(80);
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', code: 'KeyS', altKey: true, bubbles: true }));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', code: 'KeyS', altKey: true, bubbles: true }));
+  await wait(700);
+  const after2 = (ed2.innerText || '').trim();
+  check('Alt+S で封印できる', after2.startsWith('xo'), after2.slice(0, 12) + '…');
+  check('Alt+S の結果も復号できる', (await XSEAL.open(XSEAL.PROFILES.plain, [], after2)) === before2);
+
+  // 6) 属性が何も無い本文欄でも、フォーカスすればピルが出る
+  const ed3 = document.querySelector('#c3 .weird');
+  ed3.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  ed3.focus();
+  await wait(400);
+  const pill3 = [...document.querySelectorAll('.xseal-pill')].filter(p => p.style.display !== 'none');
+  // ケースBのピルを数えてしまう偽陽性を防ぐため、c3 の矩形内にあるものだけを数える
+  const r3 = ed3.getBoundingClientRect();
+  const inC3 = pill3.filter((p) => {
+    const q = p.getBoundingClientRect();
+    return q.left >= r3.left - 1 && q.right <= r3.right + 1 && q.top >= r3.top - 1 && q.bottom <= r3.bottom + 1;
+  });
+  check('属性なしの本文欄でもピルが出る', inC3.length === 1, `shown=${pill3.length} inC3=${inC3.length}`);
+
+  // 6b) 封筒の二重化しないこと（実機で xo…xo… が出た回帰）
+  ed3.textContent = 'にじゅうかしないこと';
+  ed3.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  ed3.focus();
+  await wait(300);
+  const pillC = [...document.querySelectorAll('.xseal-pill')].find((p) => {
+    const q = p.getBoundingClientRect();
+    const rr = ed3.getBoundingClientRect();
+    return q.left >= rr.left - 1 && q.top >= rr.top - 1 && q.bottom <= rr.bottom + 1;
+  });
+  pillC.click();
+  await wait(700);
+  const once = (ed3.innerText || '').trim();
+  check('封印は本文を置換する（封筒が1つ）', (once.match(/xo/g) || []).length === 1, once.slice(0, 20) + '…');
+
+  // 6c) 連打しても封筒は1つ（二重発火の回帰）
+  ed3.textContent = 'れんだしてもいっこだけ';
+  ed3.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  ed3.focus();
+  await wait(300);
+  const pickPill = () => {
+    const rr = ed3.getBoundingClientRect();
+    return [...document.querySelectorAll('.xseal-pill')].find((p) => {
+      const q = p.getBoundingClientRect();
+      return q.top >= rr.top - 1 && q.bottom <= rr.bottom + 1;
+    });
+  };
+  const pA = pickPill();
+  if (pA) { pA.click(); pA.click(); pA.click(); }
+  await wait(1200);
+  const rep = (ed3.innerText || '').trim();
+  check('連打しても封筒は1つ', (rep.match(/xo/g) || []).length === 1, rep.slice(0, 20) + '…');
+
+  // 6d) 空・1文字は封印しない
+  ed3.textContent = '';
+  ed3.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  ed3.focus();
+  await wait(250);
+  const pillE = [...document.querySelectorAll('.xseal-pill')].find((p) => {
+    const q = p.getBoundingClientRect();
+    const rr = ed3.getBoundingClientRect();
+    return q.left >= rr.left - 1 && q.top >= rr.top - 1 && q.bottom <= rr.bottom + 1;
+  });
+  pillE.click();
+  await wait(500);
+  check('本文が空なら封印しない', (ed3.innerText || '').trim() === '', JSON.stringify(ed3.innerText));
+
+  // 7) タイムラインの自動復号
+  const feed = document.getElementById('feed');
+  const t = document.createElement('div');
+  t.className = 'tweet';
+  t.innerHTML = `<div class="name">@friend</div><div data-testid="tweetText"></div>`;
+  t.querySelector('[data-testid="tweetText"]').textContent = after1;
+  feed.append(t);
+  await wait(800);
+  const plainEl = t.querySelector('.xseal-plain');
+  check('タイムラインで自動復号される', !!plainEl && !plainEl.hidden && plainEl.textContent === before1);
+
+  // 6) 通常投稿・旧 base64
+  const t2 = document.createElement('div');
+  t2.className = 'tweet';
+  t2.innerHTML = `<div class="name">@other</div><div data-testid="tweetText">ふつうの投稿です。</div>`;
+  feed.append(t2);
+  const t3 = document.createElement('div');
+  t3.className = 'tweet';
+  const b64 = btoa(String.fromCharCode(...new TextEncoder().encode('これはbase64で手動投稿された例です')));
+  t3.innerHTML = `<div class="name">@legacy</div><div data-testid="tweetText"></div>`;
+  t3.querySelector('[data-testid="tweetText"]').textContent = b64;
+  feed.append(t3);
+  await wait(800);
+  check('通常投稿にはチップを付けない', !t2.querySelector('.xseal-chip'));
+  const p3 = t3.querySelector('.xseal-plain');
+  check('旧 base64 も復号される', !!p3 && p3.textContent.includes('base64で手動投稿'));
+
+  // 7) 入れ子エディタでもボタンは1つ / 封筒を入れると 🔓 になり、押すと戻る
+  const c4 = document.querySelector('#c4');
+  c4.scrollIntoView({ block: 'center' });
+  await wait(400);   // 画面外だとピルは display:none なので、先にスクロールして可視にする
+  const inC4 = [...document.querySelectorAll('.xseal-pill')].filter((b) => {
+    const r = c4.getBoundingClientRect(); const q = b.getBoundingClientRect();
+    return q.left >= r.left - 4 && q.right <= r.right + 4 && q.top >= r.top - 4 && q.bottom <= r.bottom + 4;
+  });
+  check('入れ子の本文欄でもボタンは1つ', inC4.length === 1, `inC4=${inC4.length}`);
+  check('編集中は 🔒 表示', inC4[0]?.textContent === '🔒', inC4[0]?.textContent);
+
+  const ed4 = inC4[0] ? document.querySelector('#c4 .inner') : null;
+  if (ed4) {
+    const env4 = await XSEAL.seal(XSEAL.PROFILES.plain, null, '入れ子の本文欄で封印と復号を往復する');
+    ed4.focus();
+    ed4.textContent = env4;
+    ed4.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: env4 }));
+    await wait(400);
+    check('封筒があると 🔓 表示に変わる', inC4[0].textContent === '🔓', inC4[0].textContent);
+    inC4[0].click();
+    await wait(500);
+    check('🔓 を押すと平文に戻る', (ed4.innerText || ed4.textContent || '').trim() === '入れ子の本文欄で封印と復号を往復する',
+      JSON.stringify((ed4.innerText || ed4.textContent || '').slice(0, 20)));
+  }
+
+  // 7.5) 選択範囲だけを封印 / 2箇所 / 復号しても他が消えない
+  {
+    const ed = document.querySelector('#c1 [contenteditable="true"]');
+    const pick = async (from, len) => {
+      ed.focus();
+      const node = ed.firstChild;
+      const rg = document.createRange();
+      rg.setStart(node, from);
+      rg.setEnd(node, from + len);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(rg);
+      document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+      await wait(80);
+      document.querySelector('#c1 button[class*="xseal"]').click();
+      await wait(550);
+    };
+    ed.textContent = 'ああ いい うう';
+    await wait(150);
+    await pick(0, 2);
+    const t1 = ed.textContent;
+    check('部分封印: 選んだ所だけ封筒', t1.startsWith('xo') && t1.includes(' いい うう'), t1.slice(0, 12) + '…');
+    const n1 = [...t1].length;
+    await pick(n1 - 2, 2);
+    const t2 = ed.textContent;
+    check('部分封印: 2箇所目も封筒にできる', (t2.match(/xo/g) || []).length === 2, (t2.match(/xo/g) || []).length + '個');
+    check('部分封印: 選ばなかった語は残る', t2.includes(' いい '));
+    document.querySelector('#c1 button[class*="xseal"]').click();
+    await wait(550);
+    const t3 = ed.textContent;
+    check('復号: 1個目だけ戻る', (t3.match(/xo/g) || []).length === 1 && t3.startsWith('ああ いい ') && !t3.includes('うう'), t3.slice(0, 16) + '…');
+    document.querySelector('#c1 button[class*="xseal"]').click();
+    await wait(550);
+    const t4 = ed.textContent;
+    check('復号: 2個目も戻って元通り', t4 === 'ああ いい うう', t4.slice(0, 20));
+  }
+
+  // 8) スクロール追従（1フレーム以内に位置が合う）
+  //    rAF は背面タブでは発火しないので、非表示のときは SKIP する
+  const edS = document.querySelector('#c4 .inner');
+  const pillS = [...document.querySelectorAll('.xseal-pill')].find(b => b.__xsealEd === edS);
+  if (pillS && document.visibilityState === 'hidden') {
+    check('スクロールに1フレームで追従する', true, 'SKIP（タブが非表示で rAF が止まる）');
+  } else if (pillS) {
+    edS.scrollIntoView({ block: 'center' });
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const beforeS = pillS.getBoundingClientRect().top;
+    window.scrollBy(0, 24);
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const rS = edS.getBoundingClientRect();
+    const wantS = Math.min(rS.bottom - 28 - 2, Math.max(2, rS.top + 2));
+    const gotS = pillS.getBoundingClientRect().top;
+    check('スクロールに1フレームで追従する',
+      Math.abs(gotS - wantS) <= 2 && Math.abs(gotS - beforeS) > 5,
+      `got=${Math.round(gotS)} want=${Math.round(wantS)} delta=${Math.round(gotS - beforeS)}`);
+  } else {
+    check('スクロールに1フレームで追従する', false, 'ピルが見つからない');
+  }
+
+  // 9) ポップアップを閉じた後始末（幽霊ボタンが残らない）
+  const gone = [document.querySelector('#c2 [contenteditable]'), document.querySelector('#c3 [contenteditable]')];
+  const hadGhosts = [...document.querySelectorAll('.xseal-pill, .xseal-btn')].filter(b => gone.includes(b.__xsealEd)).length;
+  document.querySelector('#c2').remove();               // 閉じたら DOM ごと消えるケース
+  document.querySelector('#c3').style.display = 'none';  // 閉じても DOM は残るケース
+  await wait(1400);                                      // 1秒間隔の paint が走るのを待つ
+  const ghosts = [...document.querySelectorAll('.xseal-pill, .xseal-btn')].filter(b => gone.includes(b.__xsealEd));
+  check('閉じたコンポーザのボタンは残らない', hadGhosts >= 1 && ghosts.length === 0, `had=${hadGhosts} left=${ghosts.length}`);
+
+  // 9b) モーダル（投稿ポップアップ）を開いたら、外側のピルは手前に出ない
+  const ed4b = document.querySelector('#c4 .inner');
+  ed4b.scrollIntoView({ block: 'center' });
+  await wait(600);
+  const visiblePillFor = (ed) => [...document.querySelectorAll('.xseal-pill')]
+    .find((b) => b.__xsealEd === ed && b.style.display !== 'none');
+  check('モーダルを開く前にTL側のピルが出ている', !!visiblePillFor(ed4b), visiblePillFor(ed4b)?.style.display);
+
+  const modal = document.createElement('div');
+  modal.id = 'modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center';
+  const okBox = document.createElement('div');
+  okBox.style.cssText = 'width:520px;padding:16px;background:#15202b;border-radius:16px;color:#e7e9ea';
+  const modalEd = document.createElement('div');
+  modalEd.className = 'modalText';
+  modalEd.setAttribute('contenteditable', 'true');
+  modalEd.style.cssText = 'min-height:80px;border:1px solid #333;padding:8px';
+  modalEd.textContent = 'ポップアップの中の本文欄';
+  okBox.append(modalEd);
+  modal.append(okBox);
+  document.body.append(modal);
+  await wait(600);
+
+  check('モーダルが開いたらTL側のピルは隠れる', !visiblePillFor(ed4b),
+    [...document.querySelectorAll('.xseal-pill')].filter((b) => b.__xsealEd === ed4b).map((b) => b.style.display).join(',') || 'removed');
+
+  modalEd.focus();
+  modalEd.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  await wait(600);
+  check('モーダル内の本文欄にはピルが出る', !!visiblePillFor(modalEd), visiblePillFor(modalEd)?.style.display);
+
+  const mPill = visiblePillFor(modalEd);
+  if (mPill) {
+    const mr = modalEd.getBoundingClientRect();
+    const pr = mPill.getBoundingClientRect();
+    check('モーダル内のピルは本文欄の内側に置かれる',
+      pr.left >= mr.left - 2 && pr.right <= mr.right + 2 && pr.top >= mr.top - 2 && pr.bottom <= mr.bottom + 2,
+      `pill=${Math.round(pr.top)},${Math.round(pr.left)} ed=${Math.round(mr.top)},${Math.round(mr.left)}`);
+  }
+
+  modal.remove();
+  await wait(700);
+  check('モーダルを閉じたらTL側のピルが戻る', !!visiblePillFor(ed4b));
+
+  // 9c) マスクの無い小さな dialog（ホバーカード相当）では隠さない
+  const hover = document.createElement('div');
+  hover.setAttribute('role', 'dialog');
+  hover.style.cssText = 'position:fixed;left:40px;top:40px;width:320px;height:220px;background:#15202b;z-index:90';
+  document.body.append(hover);
+  await wait(700);
+  check('マスクの無いホバーカード風ダイアログではピルを隠さない', !!visiblePillFor(ed4b),
+    visiblePillFor(ed4b) ? 'shown' : 'hidden');
+  hover.remove();
+  await wait(500);
+
+  // 9d) aria-modal が無くても「マスク＋#layers の dialog」なら隠す
+  const fakeLayers = document.createElement('div');
+  fakeLayers.id = 'layers';
+  const maskEl = document.createElement('div');
+  maskEl.setAttribute('data-testid', 'mask');
+  maskEl.style.cssText = 'position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.6)';
+  const dlgEl = document.createElement('div');
+  dlgEl.setAttribute('role', 'dialog');
+  dlgEl.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:520px;height:420px;background:#15202b;z-index:96';
+  fakeLayers.append(maskEl, dlgEl);
+  document.body.append(fakeLayers);
+  await wait(700);
+  check('マスク付きダイアログ（aria-modal 無し）でも隠す', !visiblePillFor(ed4b),
+    visiblePillFor(ed4b) ? 'shown' : 'hidden');
+  fakeLayers.remove();
+  await wait(600);
+
+  // 9e) 封筒の一部を選ぶと「戻す」動作になる（封印ではなく復号）
+  {
+    const ed = document.querySelector('#c1 [contenteditable="true"]');
+    const env = await XSEAL.seal(XSEAL.PROFILES.plain, null, 'ひみつ');
+    ed.focus();
+    ed.textContent = 'まえ ' + env + ' あと';
+    ed.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ed.textContent }));
+    await wait(450);
+    const node = ed.firstChild;
+    const rg = document.createRange();
+    rg.setStart(node, 3);
+    rg.setEnd(node, 3 + [...env].length);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(rg);
+    document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
+    await wait(150);
+    const btn = document.querySelector('#c1 button[class*="xseal"]');
+    check('封筒の上を選ぶと 🔓 になる', btn.textContent === '🔓', btn.textContent);
+    btn.click();
+    await wait(700);
+    const got = (ed.innerText || ed.textContent || '').trim();
+    check('選んだ封筒が平文に戻る（前後は残る）', got === 'まえ ひみつ あと', got.slice(0, 24));
+  }
+
+  // 9f) DM 風の textarea でもボタンが出る
+  {
+    const wrap = document.createElement('div');
+    wrap.id = 'dmx';
+    wrap.style.cssText = 'position:fixed;left:40px;bottom:40px;width:320px';
+    const ta = document.createElement('textarea');
+    ta.setAttribute('data-testid', 'dmComposerTextInput');
+    ta.style.cssText = 'width:300px;height:60px';
+    wrap.append(ta);
+    document.body.append(wrap);
+    ta.focus();
+    await wait(500);
+    const near = [...document.querySelectorAll('.xseal-pill')].filter((b) => {
+      const q = b.getBoundingClientRect();
+      const r = ta.getBoundingClientRect();
+      return q.left >= r.left - 40 && q.right <= r.right + 40 && q.top >= r.top - 60 && q.bottom <= r.bottom + 40;
+    });
+    check('DM 風の textarea でもピルが出る', near.length === 1, `near=${near.length}`);
+    wrap.remove();
+    await wait(400);
+  }
+
+  // 9g) DM 画面では常設ボタンが出て、押すと入力欄が封印される
+  {
+    document.documentElement.dataset.xsealDmForce = '1';
+    await wait(1200);
+    const fab = document.querySelector('.xseal-fab');
+    check('DM 画面で常設ボタンが出る', !!fab, fab ? 'shown' : 'none');
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;left:40px;bottom:150px;width:300px';
+    const ta = document.createElement('textarea');
+    ta.setAttribute('data-testid', 'dmComposerTextInput');
+    ta.style.cssText = 'width:280px;height:54px';
+    wrap.append(ta);
+    document.body.append(wrap);
+    ta.value = 'DM のテスト本文';
+    ta.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'DM のテスト本文' }));
+    ta.focus();
+    await wait(300);
+    fab?.click();
+    await wait(800);
+    const v = ta.value || '';
+    check('常設ボタンで DM の入力欄が封筒になる', v.startsWith('xo'), v.slice(0, 10));
+    wrap.remove();
+    delete document.documentElement.dataset.xsealDmForce;
+    await wait(600);
+  }
+
+  // 9.6) 本文に封筒が3つ並んでいても、まとめて復号できる
+  {
+    const art = document.createElement('article');
+    art.setAttribute('data-testid', 'tweet');
+    const tt = document.createElement('div');
+    tt.setAttribute('data-testid', 'tweetText');
+    tt.textContent = 'xoƍƟʅઽ¡¡¡¡のxoƍƲഔˊ¡¡¡¡はxoŬɹÑË¡¡¡¡';
+    art.append(tt);
+    document.body.append(art);
+    await wait(700);
+    const chip = art.querySelector('.xseal-chip');
+    check('複数封筒の投稿に復号チップが出る', !!chip, chip ? chip.textContent : 'none');
+    let pl = art.querySelector('.xseal-plain');
+    if (pl && pl.hidden) { chip?.click(); await wait(700); pl = art.querySelector('.xseal-plain'); }
+    const got = pl && !pl.hidden ? pl.textContent : '';
+    check('複数封筒をまとめて復号できる', got === '日本産の魚介類は終わってます', got.slice(0, 24) || 'none');
+    art.remove();
+    await wait(400);
+  }
+
+  // 10) 診断 API
+  const d = globalThis.__xseal_diag?.();
+  check('__xseal_diag() が動く', !!d && d.ok === true, d ? `editors=${d.editors} toolbar=${d.toolbarFound}` : 'none');
+
+  const ok = results.filter(r => r[1]).length;
+  say(`---- ${ok}/${results.length} passed ----`);
+  document.title = `${ok}/${results.length} passed`;
+})();
+</script>
+<!-- スクロール追従のテスト用にページを縦に伸ばす -->
+<div id="spacer" style="height:2400px"></div>
+</body>
+</html>

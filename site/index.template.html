@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xseal — X の投稿を封印して出そう</title>
+<meta name="description" content="X の投稿・DM を平文のまま出さずに「封印」して投稿し、タイムライン上で復号する Chrome / Firefox 拡張とウェブツール。">
+<style>
+  :root { color-scheme: dark; --bg:#080b10; --card:#0e141b; --line:#1c2733; --fg:#e7ecf2; --dim:#8b98a6; --acc:#1d9bf0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:radial-gradient(1200px 600px at 50% -10%, #10202f 0%, var(--bg) 60%) no-repeat, var(--bg);
+         color:var(--fg); font:16px/1.75 -apple-system,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 20px; }
+  header { padding: 84px 0 48px; text-align: center; }
+  .badge { display:inline-block; padding:4px 12px; border:1px solid #22405a; border-radius:9999px; font-size:12px; color:#8ecaf5; letter-spacing:.08em; }
+  h1 { font-size: clamp(30px, 6vw, 46px); line-height:1.25; margin: 18px 0 10px; letter-spacing:-.01em; }
+  h1 span { color: var(--acc); }
+  .lead { color: var(--dim); font-size: 16px; max-width: 640px; margin: 0 auto; }
+  .cta { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top: 26px; }
+  a.btn, button { border:0; border-radius:9999px; padding:12px 22px; font:600 15px/1 inherit; cursor:pointer; text-decoration:none;
+                  background:var(--acc); color:#fff; display:inline-block; }
+  a.btn.ghost, button.ghost { background:#16212c; color:#cfe0ee; }
+  a.btn:hover, button:hover { filter: brightness(1.12); }
+  section { border-top:1px solid var(--line); padding: 44px 0; }
+  h2 { font-size: 20px; margin: 0 0 8px; }
+  .muted { color: var(--dim); font-size: 14px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 20px; }
+  .card { background: var(--card); border:1px solid var(--line); border-radius: 14px; padding: 18px 18px 16px; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  .card p { margin: 0; color: var(--dim); font-size: 13.5px; line-height:1.65; }
+  .tool { background: var(--card); border:1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 18px; }
+  textarea { width:100%; min-height:110px; padding:12px; border-radius:10px; border:1px solid #223040; background:#070b10;
+             color:var(--fg); font:14px/1.6 ui-monospace,"SF Mono",Menlo,monospace; resize:vertical; }
+  textarea:focus { outline:2px solid var(--acc); outline-offset:-1px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .meter { height:4px; border-radius:2px; background:#16212c; margin-top:12px; overflow:hidden; }
+  .meter > i { display:block; height:100%; width:0; background:var(--acc); transition:width .2s; }
+  .meter.over > i { background:#f4212e; }
+  .stat { display:flex; justify-content:space-between; font-size:12px; color:var(--dim); margin-top:6px; }
+  .ok { color:#2ecc71; } .bad { color:#f4212e; }
+  code { background:#111a23; padding:1px 6px; border-radius:4px; font-size:13px; }
+  .env { word-break:break-all; font:13.5px/1.7 ui-monospace,Menlo,monospace; color:#bcd4e8;
+         background:#070b10; border:1px solid var(--line); border-radius:10px; padding:12px; margin-top:10px; max-height:180px; overflow:auto; }
+  ol { padding-left: 1.2em; color: var(--dim); }
+  ol li { margin: 8px 0; }
+  footer { border-top:1px solid var(--line); padding: 28px 0 60px; color:#5f6b78; font-size:13px; }
+  .warn { border-left:3px solid #f4212e; padding-left:12px; color:#c9a0a4; font-size:13.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="badge">xo 形式 ・ 鍵なし ・ 280重みに最大406字</span>
+    <h1>投稿を、<span>読みにくく</span>して出そう。</h1>
+    <p class="lead">X の凍結祭り対策。本文を「封印」してから投稿すれば、キーワード検索にも一括通報ボットにも引っかからない。読む側は拡張が自動で復号する。</p>
+    <div class="cta">
+      <a class="btn" href="#tool">ブラウザで試す</a>
+      <a class="btn ghost" href="#ext">拡張の入れ方</a>
+    </div>
+  </header>
+
+  <section id="why">
+    <h2>なにを守るのか</h2>
+    <p class="muted">守れるのは「キーワード一致による検索と一括通報」の経路だけ。スクショ通報・アカウント単位の執行・Ban Evasion ポリシーは防げない。そこは勘違いしないで。</p>
+    <div class="grid">
+      <div class="card"><h3>🔍 キーワード検索</h3><p>本文に語がそのまま入らないので、語で検索してもヒットしない。通報ボットの正規表現も空振りする。</p></div>
+      <div class="card"><h3>📉 重みは文字数と同じ</h3><p>2048種の文字は全部「重み1」。つまり暗号文の文字数がそのまま X のカウントになる。280重みに406字入る。</p></div>
+      <div class="card"><h3>🔓 鍵はいらない</h3><p>AES を使わない。圧縮して文字を置き換えるだけ。だから鍵配布もパスフレーズ忘れも起きない。</p></div>
+      <div class="card"><h3>👀 でも秘密ではない</h3><p>拡張を持っている人なら誰でも復号できる。本当の秘密には使えない。「検索に引っかからなくする」だけ。</p></div>
+    </div>
+  </section>
+
+  <section id="tool">
+    <h2>ブラウザで試す</h2>
+    <p class="muted">このページだけで完結する。送信は一切しない（全部ローカル）。</p>
+
+    <div class="tool">
+      <textarea id="plain">今日は朝から雨だったけど、昼過ぎには止んでちょっと嬉しかった。コンビニの新作スイーツが思ったより美味しくて、また買いに行こうと思う。</textarea>
+      <div class="row">
+        <button id="enc">🔒 封印する</button>
+        <button class="ghost" id="copy">コピー</button>
+        <button class="ghost" id="toX">Xで投稿</button>
+      </div>
+      <div class="meter" id="meter"><i></i></div>
+      <div class="stat"><span>封印後 <b id="cw">—</b></span><span>/ 280 重み</span></div>
+      <div class="env" id="cipher">ここに封印後の文字列が出ます</div>
+    </div>
+
+    <div class="tool">
+      <h3 style="margin:0 0 10px;font-size:15px">復号する</h3>
+      <textarea id="in" placeholder="xo... を貼る"></textarea>
+      <div class="row"><button id="dec">🔓 復号</button><span id="decstat" class="muted" style="margin:0"></span></div>
+      <div class="env" id="out" style="display:none"></div>
+    </div>
+
+    <div class="tool">
+      <h3 style="margin:0 0 10px;font-size:15px">ポストのURLから復号</h3>
+      <p class="muted" style="margin:0 0 10px">X のポストURLを貼ると、本文を取りに行って封印を解く（fxtwitter 経由）。</p>
+      <input id="url" placeholder="https://x.com/user/status/1234567890" style="width:100%;padding:12px;border-radius:10px;border:1px solid #223040;background:#070b10;color:#e7ecf2;font:14px ui-monospace,Menlo,monospace">
+      <div class="row"><button id="fetch">取得して復号</button><span id="fstat" class="muted" style="margin:0"></span></div>
+      <div class="env" id="fout" style="display:none"></div>
+    </div>
+  </section>
+
+  <section id="ext">
+    <h2>拡張の入れ方</h2>
+    <ol>
+      <li>Chrome / Edge / Brave: <code>chrome://extensions</code> を開き「デベロッパーモード」を ON →「パッケージ化されていない拡張機能を読み込む」→ <code>ext/chrome</code> を選ぶ。</li>
+      <li>Firefox: <code>about:debugging#/runtime/this-firefox</code> →「一時的なアドオンを読み込む」→ <code>ext/firefox/manifest.json</code> を選ぶ。</li>
+      <li>x.com を開き直す。投稿欄に 🔒 が出る。</li>
+    </ol>
+    <p class="muted">本文を書いて 🔒 を押すと、その場で封印された文字列に置き換わる。あとは普通にポストするだけ。タイムライン・検索結果・DM の封筒は自動で復号されて下に表示される。</p>
+    <p class="warn">免責: この形式は暗号ではない。検索回避の効果はあるが、凍結を保証するものではない。</p>
+  </section>
+
+  <section id="how">
+    <h2>仕組み</h2>
+    <div class="grid">
+      <div class="card"><h3>1. 圧縮</h3><p>日本語の文字頻度で作った静的モデル＋算術符号。日本語1文字あたり約7〜10bitまで縮む。</p></div>
+      <div class="card"><h3>2. 文字に置換</h3><p>ビット列を 11bit ずつ切って、重み1の Unicode 2048種（ラテン拡張・キリル・インド系など）に落とす。</p></div>
+      <div class="card"><h3>3. 先頭に印</h3><p><code>xo</code> を付ける。復号側はこの印で形式を見分ける。ASCII 記号を一切使わないので URL 化・メンション化も起きない。</p></div>
+    </div>
+  </section>
+
+  <footer>
+    xseal — ローカル完結。サーバーに何も送らない。実装は <code>x_cipher_research/</code> の <code>xseal.mjs</code> と同一コア。
+  </footer>
+</div>
+
+<script>/*__CORE__*/</script>
+<script>
+const $ = (id) => document.getElementById(id);
+const CFG = XSEAL.PROFILES.plain;
+
+function setMeter(w) {
+  $('meter').classList.toggle('over', w > 280);
+  $('meter').querySelector('i').style.width = Math.min(100, (w / 280) * 100) + '%';
+  $('cw').textContent = w + ' 重み';
+}
+
+async function doSeal() {
+  const t = $('plain').value;
+  if (!t.trim()) return;
+  const env = await XSEAL.seal(CFG, null, t);
+  $('cipher').textContent = env;
+  setMeter(XSEAL.weightedLength(env));
+}
+
+$('enc').onclick = doSeal;
+$('plain').addEventListener('input', () => { clearTimeout(window.__t); window.__t = setTimeout(doSeal, 250); });
+
+$('copy').onclick = async () => {
+  const s = $('cipher').textContent;
+  if (!s || s.startsWith('ここに')) return;
+  await navigator.clipboard.writeText(s);
+  $('copy').textContent = 'コピーした';
+  setTimeout(() => ($('copy').textContent = 'コピー'), 1200);
+};
+
+$('toX').onclick = () => {
+  const s = $('cipher').textContent;
+  if (!s || s.startsWith('ここに')) return;
+  window.open('https://x.com/intent/post?text=' + encodeURIComponent(s), '_blank');
+};
+
+$('dec').onclick = async () => {
+  const msg = $('in').value.trim();
+  if (!msg) return;
+  const out = $('out');
+  out.style.display = 'block';
+  try {
+    const p = await XSEAL.open(CFG, [], msg);
+    out.textContent = p;
+    out.classList.remove('err');
+    $('decstat').innerHTML = '<span class="ok">復号しました</span>';
+  } catch (e) {
+    out.textContent = e.message;
+    out.classList.add('err');
+    $('decstat').innerHTML = '<span class="bad">失敗</span>';
+  }
+};
+
+$('fetch').onclick = async () => {
+  const url = $('url').value.trim();
+  const m = url.match(/status\/(\d+)/);
+  const out = $('fout');
+  out.style.display = 'block';
+  if (!m) { out.textContent = 'URL から status id が取れません'; return; }
+  $('fstat').textContent = '取得中…';
+  try {
+    const r = await fetch('https://api.fxtwitter.com/status/' + m[1]);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const text = d?.tweet?.text || '';
+    const ch = [...text];
+    let i = ch.findIndex((c, k) => c === 'x' && (ch[k + 1] === 'o' || /[1-5]/.test(ch[k + 1] || '')));
+    if (i < 0) throw new Error('この投稿に封筒はありません');
+    let j = i + 2;
+    const set = new Set([...XSEAL.A2048, ...XSEAL.A1024, ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-']);
+    while (j < ch.length && set.has(ch[j])) j++;
+    const env = ch.slice(i, j).join('');
+    const plain = await XSEAL.open(CFG, [], env);
+    out.textContent = plain;
+    $('fstat').innerHTML = '<span class="ok">復号しました</span>';
+  } catch (e) {
+    out.textContent = e.message;
+    $('fstat').innerHTML = '<span class="bad">失敗</span>';
+  }
+};
+
+doSeal();
+</script>
+</body>
+</html>

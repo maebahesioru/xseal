@@ -1,0 +1,126 @@
+/* xseal — X の UI に馴染ませる（既存クラス名には一切依存しない） */
+.xseal-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-inline-end: 6px;
+  border-radius: 9999px;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  color: rgb(29, 155, 240);
+  transition: background-color .15s ease, transform .08s ease;
+  user-select: none;
+}
+.xseal-btn:hover { background-color: rgba(29, 155, 240, .14); }
+.xseal-btn:active { transform: scale(.94); }
+
+/* 本文欄の内側に浮かぶ保険のボタン（ツールバーが取れない画面でも必ず見える） */
+.xseal-pill {
+  all: unset;
+  box-sizing: border-box;
+  position: fixed;
+  z-index: 2147483600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: 1px solid rgba(29, 155, 240, .28);
+  background: rgba(29, 155, 240, .10);
+  color: rgb(29, 155, 240);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  opacity: .62;
+  backdrop-filter: blur(4px);
+  will-change: top, left;   /* スクロール中は毎フレーム座標を書き換えるので再レイアウトを軽くする */
+  transition: opacity .15s ease, background-color .15s ease, transform .08s ease;
+}
+.xseal-pill.sealed { background: rgba(255, 173, 31, .14); border-color: rgba(255, 173, 31, .42); }
+.xseal-pill:hover { opacity: 1; background: rgba(29, 155, 240, .26); }
+.xseal-pill:active { transform: scale(.94); }
+.xseal-pill[disabled] { opacity: .3; cursor: default; }
+
+.xseal-chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.xseal-chip {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border: 1px solid rgba(29, 155, 240, .45);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: rgb(29, 155, 240);
+  background: rgba(29, 155, 240, .08);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color .15s ease;
+}
+.xseal-chip:hover { background: rgba(29, 155, 240, .18); }
+
+.xseal-plain {
+  flex: 1 1 100%;
+  margin-top: 2px;
+  padding: 8px 12px;
+  border-left: 3px solid rgb(29, 155, 240);
+  border-radius: 6px;
+  background: rgba(29, 155, 240, .07);
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.xseal-plain[hidden] { display: none; }
+.xseal-plain.err { border-left-color: rgb(244, 33, 46); background: rgba(244, 33, 46, .08); color: rgb(244, 33, 46); }
+
+.xseal-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 2147483647;
+  transform: translate(-50%, 16px);
+  padding: 10px 18px;
+  border-radius: 9999px;
+  background: rgba(15, 20, 25, .94);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.xseal-toast.show { opacity: 1; transform: translate(-50%, 0); }
+.xseal-toast.bad { background: rgb(244, 33, 46); }
+
+/* DM 用の常設ボタン（欄に貼り付けるピルが出ないときの保険） */
+.xseal-pill.xseal-fab {
+  top: auto !important;
+  left: auto !important;
+  right: 18px !important;
+  bottom: 84px !important;
+  width: 44px !important;
+  height: 44px !important;
+  font-size: 19px !important;
+  opacity: .92;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+}
