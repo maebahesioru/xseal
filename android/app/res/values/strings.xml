@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">xseal</string>
+    <string name="a11y_desc">投稿欄の文字を xseal 形式に変換するために、画面の入力欄の読み書きを行います。内容の送信や外部への送信は一切しません。</string>
+</resources>

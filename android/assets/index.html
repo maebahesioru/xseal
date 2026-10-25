@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>xseal core</title></head>
+<body>
+<script src="core.js"></script>
+<script>
+(function () {
+  "use strict";
+  var X = globalThis.XSEAL;
+  var MARKS = { xo: ['plain'], x3: ['deep'], x4: ['ultra'], x5: ['self'], x2: ['max'], x1: ['std', 'tight'] };
+  var MIN_ENV = { xo: 8, x2: 8, x3: 8, x4: 8, x5: 8, x1: 24 };
+
+  var S1024 = null, S2048 = null;
+  function set1024() { if (!S1024) S1024 = new Set(String(X.A1024).split('')); return S1024; }
+  function set2048() { if (!S2048) S2048 = new Set(String(X.A2048).split('')); return S2048; }
+
+  function alphabetSet(mark) {
+    if (mark === 'x2' || mark === 'x3') return set1024();
+    if (mark === 'xo' || mark === 'x4' || mark === 'x5') return set2048();
+    return null;
+  }
+
+  // 本文中の封筒をすべて拾う（拡張機能の envSpans と同じ規則）
+  function envSpans(text) {
+    var out = [];
+    for (var i = 0; i < text.length; i++) {
+      var m = text.charAt(i + 1);
+      if (text.charAt(i) !== 'x' || 'o2345'.indexOf(m) < 0) continue;
+      if (i > 0 && /[0-9A-Za-z]/.test(text.charAt(i - 1))) continue;
+      var mark = 'x' + m;
+      var set = alphabetSet(mark);
+      if (!set) continue;
+      var j = i + 2;
+      while (j < text.length && set.has(text.charAt(j))) j++;
+      if (j - i - 2 >= (MIN_ENV[mark] || 8)) {
+        out.push({ start: i, end: j, mark: mark, text: text.slice(i, j) });
+      }
+      i = j - 1;
+    }
+    return out;
+  }
+
+  function reply(id, ok, value, error) {
+    try {
+      window.XsealBridge.resolve(id, JSON.stringify({ ok: !!ok, value: value == null ? '' : String(value), error: error == null ? '' : String(error) }));
+    } catch (e) { /* ブリッジ未接続 */ }
+  }
+
+  function fail(id, e) {
+    var msg = (e && (e.message || e.toString())) || '不明なエラー';
+    reply(id, false, '', msg);
+  }
+
+  window.XsealNative = {
+    probe: function (_arg, id) {
+      try {
+        reply(id, true, JSON.stringify({
+          dstream: typeof DecompressionStream !== 'undefined',
+          ac: !!(X && X.PROFILES && X.PROFILES.plain),
+          profiles: X ? Object.keys(X.PROFILES).join(',') : ''
+        }));
+      } catch (e) { fail(id, e); }
+    },
+
+    seal: function (text, id) {
+      try {
+        Promise.resolve(X.seal(X.PROFILES.plain, null, String(text)))
+          .then(function (env) { reply(id, true, env); }, function (e) { fail(id, e); });
+      } catch (e) { fail(id, e); }
+    },
+
+    unseal: function (text, id) {
+      try {
+        var src = String(text);
+        var spans = envSpans(src);
+        if (!spans.length) { reply(id, false, '', '封筒（xo で始まる文字列）が見つかりません'); return; }
+        var parts = [];
+        var cursor = 0;
+        var firstErr = null;
+        var chain = Promise.resolve();
+        spans.forEach(function (sp) {
+          chain = chain.then(function () {
+            parts.push(src.slice(cursor, sp.start));
+            cursor = sp.end;
+            var cands = (MARKS[sp.mark] || []).map(function (n) { return X.PROFILES[n]; });
+            var p = Promise.reject(new Error('未対応の形式: ' + sp.mark));
+            cands.forEach(function (cfg) {
+              p = p.catch(function () { return X.open(cfg, null, sp.text); });
+            });
+            return p.then(function (plain) {
+              parts.push(plain);
+            }, function (e) {
+              if (!firstErr) firstErr = e;
+              parts.push(sp.text);
+            });
+          });
+        });
+        chain.then(function () {
+          parts.push(src.slice(cursor));
+          var out = parts.join('');
+          if (firstErr && out === src) { fail(id, firstErr); return; }
+          reply(id, true, out);
+        }, function (e) { fail(id, e); });
+      } catch (e) { fail(id, e); }
+    },
+
+    weights: function (text, id) {
+      try { reply(id, true, String(X.weightedLength(String(text)))); } catch (e) { fail(id, e); }
+    }
+  };
+
+  try { window.XsealBridge.ready(); } catch (e) { /* noop */ }
+})();
+</script>
+</body>
+</html>

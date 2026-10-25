@@ -49,6 +49,18 @@
 > Firefox は一時アドオンなので、ブラウザを終了すると消えます。常用するには
 > `about:config` で `xpinstall.signatures.required` を無効化して署名なしの xpi を入れてください。
 
+## Android
+
+同じコアを WebView に積んだ Android 版もある。他アプリの上に **xo の丸ボタンを常駐**させ、タップで封印／復号する。
+
+- 配布: [xseal-android.apk](https://github.com/maebahesioru/xseal/releases/latest/download/xseal-android.apk)（Android 8.0+・541 KB）
+- ソース: [`android/`](android/)（Gradle 不使用。`aapt2`→`javac`→`d8`→`apksigner` の手組みビルド）
+- 初回だけ ①オーバーレイ権限 ②アクセシビリティ ③ボタンを出す、の3つを押す
+- 投稿欄へは `AccessibilityService` の `ACTION_SET_TEXT` で直接書き込む。書けない環境では自動でクリップボードに落ちる
+- 検証済み: Waydroid（Android 14）で封印→復号の往復、オーバーレイの常駐表示。**本物の X アプリの投稿欄での書き込みは未検証**
+
+ビルドは `ANDROID_SDK_ROOT=~/android-sdk ./android/build.sh`（詳細は [`android/README.md`](android/README.md)）。
+
 ## 使い方
 
 1. x.com で投稿欄をクリック → 右上の `🔒` を押す
@@ -91,6 +103,7 @@ node build.mjs
 ## ファイル構成
 
 ```
+android/          Android 版（Gradle 不使用の手組みビルド）
 core/            封印コア（圧縮・算術符号・文字変換・封筒フォーマット）
 src/             content script / options / manifest / アイコン
 chrome/ firefox/ ビルド済みの拡張（そのまま読み込める）

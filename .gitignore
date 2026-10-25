@@ -3,3 +3,8 @@ node_modules/
 *.zip
 *.xpi
 .DS_Store
+android/build/
+android/assets/core.js
+android/*.apk
+android/*.idsig
+android/debug.keystore
